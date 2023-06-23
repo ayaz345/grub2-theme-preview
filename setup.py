@@ -14,7 +14,7 @@ setup(
     license='GPL v2 or later',
     version=VERSION_STR,
     url='https://github.com/hartwork/grub2-theme-preview',
-    download_url='https://github.com/hartwork/grub2-theme-preview/archive/%s.tar.gz' % VERSION_STR,
+    download_url=f'https://github.com/hartwork/grub2-theme-preview/archive/{VERSION_STR}.tar.gz',
     author='Sebastian Pipping',
     author_email='sebastian@pipping.org',
     python_requires='>=3.7',

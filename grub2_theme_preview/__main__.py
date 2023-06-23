@@ -35,7 +35,7 @@ class _CommandNotFoundException(Exception):
 
     def __str__(self):
         if self._package is None:
-            return 'Command "%s" not found' % self._command
+            return f'Command "{self._command}" not found'
         else:
             return f'Command "{self._command}" of {self._package} not found'
 
@@ -80,7 +80,7 @@ def _mkdir_if_missing(path):
 
 def _run(cmd, verbose):
     if verbose:
-        print('# %s' % ' '.join(cmd))
+        print(f"# {' '.join(cmd)}")
         stdout = None
     else:
         stdout = open('/dev/null', 'w')
@@ -121,9 +121,10 @@ def _make_grub_cfg_load_our_theme(grub_cfg_content, source_type, resolution_or_n
         'loadfont $prefix/fonts/unicode.pf2',
     ]
 
-    for relative_path in font_files_to_load:
-        prolog_chunks.append(f'loadfont $prefix/{_PATH_FULL_THEME}/{relative_path}')
-
+    prolog_chunks.extend(
+        f'loadfont $prefix/{_PATH_FULL_THEME}/{relative_path}'
+        for relative_path in font_files_to_load
+    )
     prolog_chunks += [
         'insmod all_video',
         'insmod gfxterm',
@@ -133,14 +134,13 @@ def _make_grub_cfg_load_our_theme(grub_cfg_content, source_type, resolution_or_n
     ]
 
     if resolution_or_none is not None:
-        # We need to be the first call to 'terminal_output gfxterm'
-        # if we want to have a say with resolution
-        prolog_chunks.append('set gfxmode=%dx%d' % resolution_or_none)
-        prolog_chunks.append('terminal_output gfxterm')
-
-    prolog_chunks.append('')  # blank line
-    prolog_chunks.append('')  # trailing new line
-
+        prolog_chunks.extend(
+            (
+                'set gfxmode=%dx%d' % resolution_or_none,
+                'terminal_output gfxterm',
+            )
+        )
+    prolog_chunks.extend(('', ''))
     epilog_chunks = [
         # Ensure that we always have one or more menu entries
         '',
@@ -159,9 +159,11 @@ def _make_grub_cfg_load_our_theme(grub_cfg_content, source_type, resolution_or_n
         epilog_chunks.append('terminal_output gfxterm')
 
     if source_type == _SourceType.DIRECTORY:
-        epilog_chunks.append('set theme=$prefix/%s/theme.txt' % _PATH_FULL_THEME)
+        epilog_chunks.append(f'set theme=$prefix/{_PATH_FULL_THEME}/theme.txt')
     else:
-        epilog_chunks.append('background_image $prefix/%s' % _get_image_path_for(source_type))
+        epilog_chunks.append(
+            f'background_image $prefix/{_get_image_path_for(source_type)}'
+        )
 
     # Make sure that lines like "set root='hd0,msdos1'" do not get us
     # into unnecessary "unknown filesystem" error situations
@@ -195,11 +197,10 @@ def _make_final_grub_cfg_content(source_type, source_grub_cfg, resolution_or_non
             continue
 
         try:
-            f = open(candidate)
-            content = f.read()
-            f.close()
+            with open(candidate) as f:
+                content = f.read()
         except OSError as e:
-            print('INFO: %s' % str(e))
+            print(f'INFO: {str(e)}')
         else:
             break
     else:
@@ -212,12 +213,10 @@ def _make_final_grub_cfg_content(source_type, source_grub_cfg, resolution_or_non
 
 
 def resolution(text):
-    m = re.match('^([1-9][0-9]{2,})x([1-9][0-9]{2,})$', text)
-    if not m:
-        raise ValueError('Not a supported resolution: "%s"' % text)
-    width = int(m.group(1))
-    height = int(m.group(2))
-    return (width, height)
+    if m := re.match('^([1-9][0-9]{2,})x([1-9][0-9]{2,})$', text):
+        return int(m[1]), int(m[2])
+    else:
+        raise ValueError(f'Not a supported resolution: "{text}"')
 
 
 def timeout(text):
@@ -236,7 +235,7 @@ def iterate_pf2_files_relative(abs_theme_dir):
     ):
         for path in sorted(glob.iglob(pattern), key=lambda path: path.lower()):
             relative_path = os.path.relpath(path, abs_theme_dir)
-            print('INFO: Appending to fonts to load: %s' % relative_path)
+            print(f'INFO: Appending to fonts to load: {relative_path}')
             yield relative_path
 
 
@@ -280,7 +279,9 @@ def parse_command_line(argv):
     parser.add_argument('source',
                         metavar='PATH',
                         help='path of theme directory (or PNG/TGA image file) to preview')
-    parser.add_argument('--version', action='version', version='%(prog)s ' + VERSION_STR)
+    parser.add_argument(
+        '--version', action='version', version=f'%(prog)s {VERSION_STR}'
+    )
 
     commands = parser.add_argument_group('command location arguments')
     commands.add_argument('--grub2-mkrescue',
@@ -336,7 +337,7 @@ def parse_command_line(argv):
 
     if options.qemu is None:
         import platform
-        options.qemu = 'qemu-system-%s' % platform.machine()
+        options.qemu = f'qemu-system-{platform.machine()}'
 
     if options.grub2_mkrescue is None:
         try:
@@ -350,7 +351,7 @@ def parse_command_line(argv):
 
 
 def _grub2_directory(platform):
-    return '{}/{}'.format(os.environ.get('G2TP_GRUB_LIB', '/usr/lib/grub'), platform)
+    return f"{os.environ.get('G2TP_GRUB_LIB', '/usr/lib/grub')}/{platform}"
 
 
 def _grub2_platform():
@@ -450,8 +451,10 @@ def _inner_main(options):
         grub2_platform = _grub2_platform()
         grub2_platform_directory = _grub2_directory(grub2_platform)
         if not os.path.exists(grub2_platform_directory):
-            raise OSError(errno.ENOENT,
-                          'GRUB platform directory "%s" not found' % grub2_platform_directory)
+            raise OSError(
+                errno.ENOENT,
+                f'GRUB platform directory "{grub2_platform_directory}" not found',
+            )
 
         is_efi_host = 'efi' in grub2_platform
         if is_efi_host:
@@ -461,15 +464,16 @@ def _inner_main(options):
                 package_names_hint = ' or '.join(
                     repr(package_name) for package_name in omvf_candidate_package_names)
                 raise OSError(
-                    errno.ENOENT, 'OVMF image file "%s" is missing, please install package %s.' %
-                    (omvf_image_path_hint, package_names_hint))
+                    errno.ENOENT,
+                    f'OVMF image file "{omvf_image_path_hint}" is missing, please install package {package_names_hint}.',
+                )
             print(f'INFO: Found OVMF image at {omvf_image_path!r}.')
 
         try:
             abs_tmp_img_file = os.path.join(abs_tmp_folder, 'grub2_theme_demo.img')
             assemble_cmd = [
                 options.grub2_mkrescue,
-                '--directory=%s' % grub2_platform_directory,
+                f'--directory={grub2_platform_directory}',
                 '--xorriso',
                 options.xorriso,
                 '--output',
@@ -483,13 +487,14 @@ def _inner_main(options):
                     try:
                         _require_recursive_read_access_at(abs_boot_loader_path)
                     except OSError as e:
-                        print('INFO: %s' % str(e))
-                        print('INFO: Files at "%s" will NOT be added to the GRUB rescue image.'
-                              % abs_boot_loader_path)
+                        print(f'INFO: {str(e)}')
+                        print(
+                            f'INFO: Files at "{abs_boot_loader_path}" will NOT be added to the GRUB rescue image.'
+                        )
                     else:
-                        assemble_cmd.append('boot/loader=' + abs_boot_loader_path)
+                        assemble_cmd.append(f'boot/loader={abs_boot_loader_path}')
 
-                assemble_cmd.append('boot/grub/grub.cfg=%s' % abs_tmp_grub_cfg_file)
+                assemble_cmd.append(f'boot/grub/grub.cfg={abs_tmp_grub_cfg_file}')
 
                 if source_type != _SourceType.DIRECTORY:
                     assemble_cmd += [
@@ -507,14 +512,14 @@ def _inner_main(options):
 
                 if not os.path.exists(abs_tmp_img_file):
                     command = os.path.basename(options.grub2_mkrescue)
-                    raise OSError(errno.ENOENT, '%s failed to create the rescue image' % command)
+                    raise OSError(errno.ENOENT, f'{command} failed to create the rescue image')
 
                 run_command = [
                     options.qemu,
                     '-m',
                     '256',
                     '-drive',
-                    'file=%s,index=0,media=disk,format=raw' % abs_tmp_img_file,
+                    f'file={abs_tmp_img_file},index=0,media=disk,format=raw',
                 ]
                 if options.enable_kvm:
                     run_command.append('-enable-kvm')
@@ -562,7 +567,7 @@ def main(argv=None):
     except BaseException as e:
         if options.debug:
             traceback.print_exc()
-        print('ERROR: %s' % str(e), file=sys.stderr)
+        print(f'ERROR: {str(e)}', file=sys.stderr)
         sys.exit(1)
 
 
